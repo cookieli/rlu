@@ -404,7 +404,7 @@ int main(int argc, char **argv)
 				"  -s, --seed <int>\n"
 				"        RNG seed (0=time-based, default=" XSTR(DEFAULT_SEED) ")\n"
 				"  -u, --update-rate <int>\n"
-				"        Percentage of update transactions (1000 = 100 percent) (default=" XSTR(DEFAULT_UPDATE) ")\n"				
+				"        Percentage barrierof update transactions (1000 = 100 percent) (default=" XSTR(DEFAULT_UPDATE) ")\n"				
 				);
 			exit(0);
 			case 'a':

@@ -115,7 +115,7 @@ typedef struct rlu_thread_data {
 
 	long padding_3[RLU_DEFAULT_PADDING];
 
-	wait_entry_t q_threads[RLU_MAX_THREADS];
+	wait_entry_t q_threads[RLU_MAX_THREADS];//it includes active thread sets 
 
 	long ws_head_counter;
 	long ws_wb_counter;

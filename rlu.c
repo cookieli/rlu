@@ -172,10 +172,12 @@ static volatile rlu_thread_data_t *g_rlu_threads[RLU_MAX_THREADS] = {0,};
 
 static volatile long g_rlu_writer_locks[RLU_MAX_WRITER_LOCKS] = {0,};
 
-static volatile long g_rlu_array[RLU_CACHE_LINE_SIZE * 64] = {0,};
+// static volatile long g_rlu_array[RLU_CACHE_LINE_SIZE * 5] = {0,};//default 64
 
-#define g_rlu_writer_version g_rlu_array[RLU_CACHE_LINE_SIZE * 2]
-#define g_rlu_commit_version g_rlu_array[RLU_CACHE_LINE_SIZE * 4]
+static volatile long g_rlu_writer_version = 0;
+static volatile long g_rlu_commit_version = 0;
+// #define g_rlu_writer_version g_rlu_array[RLU_CACHE_LINE_SIZE * 2]
+// #define g_rlu_commit_version g_rlu_array[RLU_CACHE_LINE_SIZE * 4]
 
 /////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
@@ -485,7 +487,7 @@ static void rlu_init_quiescence(rlu_thread_data_t *self) {
 
 		self->q_threads[th_id].run_counter = g_rlu_threads[th_id]->run_counter;
 
-		if (self->q_threads[th_id].run_counter & 0x1) {
+		if (self->q_threads[th_id].run_counter & 0x1) {//if run counter is even ,then we need to wait for it to accpmplish
 			// The other thread is running -> wait for the thread
 			self->q_threads[th_id].is_wait = 1;	
 		}
@@ -503,12 +505,12 @@ static long rlu_wait_for_quiescence(rlu_thread_data_t *self, long version_limit)
 
 		while (self->q_threads[th_id].is_wait) {
 			iters++;
-
+			//it means run counter has been added, it's reader has finished
 			if (self->q_threads[th_id].run_counter != g_rlu_threads[th_id]->run_counter) {
-				self->q_threads[th_id].is_wait = 0;
+				self->q_threads[th_id].is_wait = 0;//
 				break;
 			}
-
+			//it means this thread reader's start after writer start 
 			if (version_limit) {
 				if (g_rlu_threads[th_id]->local_version >= version_limit) {
 					self->q_threads[th_id].is_wait = 0;
@@ -857,7 +859,7 @@ int rlu_try_lock(rlu_thread_data_t *self, intptr_t **p_p_obj, size_t obj_size) {
 
 	RLU_ASSERT_MSG(p_obj != NULL, self, "[%ld] rlu_try_lock: tried to lock a NULL pointer\n", self->writer_version);
 
-	p_obj_copy = (intptr_t *)GET_COPY(p_obj);
+	p_obj_copy = (intptr_t *)GET_COPY(p_obj);//get its object header, then get its copy pointer from header
 
 	if (PTR_IS_COPY(p_obj_copy)) {
 		TRACE_1(self, "tried to lock a copy of an object. p_obj = %p\n", p_obj);
@@ -877,7 +879,7 @@ int rlu_try_lock(rlu_thread_data_t *self, intptr_t **p_p_obj, size_t obj_size) {
 		if (th_id == self->uniq_id) {
 			if (self->run_counter == WS_GET_RUN_COUNTER(p_ws_obj_h)) {
 				// p_obj already locked by current execution of this thread.
-				// => return copy
+				// => return copyrlu_try_lock
 				TRACE_2(self, "[%ld] already locked by this thread. p_obj = %p th_id = %ld\n",
 					self->local_version, p_obj, th_id);
 				*p_p_obj = p_obj_copy;
@@ -886,8 +888,8 @@ int rlu_try_lock(rlu_thread_data_t *self, intptr_t **p_p_obj, size_t obj_size) {
 
 			TRACE_1(self, "[%ld] already locked by another execution of this thread -> fail and sync. p_obj = %p th_id = %ld\n",
 				self->local_version, p_obj, th_id);
-			// p_obj is locked by another execution of this thread.
-			self->is_sync++;
+			// p_obj is locked by another execution of this thread.deref
+			self->is_sync++;//why we need this :to sync this thread 
 			return 0;
 		}
 
@@ -911,10 +913,10 @@ int rlu_try_lock(rlu_thread_data_t *self, intptr_t **p_p_obj, size_t obj_size) {
 	}
 
 	// Add write-set header for the object
-	p_obj_copy = rlu_add_ws_obj_header_to_write_set(self, p_obj, obj_size);
+	p_obj_copy = rlu_add_ws_obj_header_to_write_set(self, p_obj, obj_size);//it now points to the log correnponding pos
 
 	// Try lock p_obj -> install pointer to copy
-	if (!TRY_CAS_PTR_OBJ_COPY(p_obj, p_obj_copy)) {
+	if (!TRY_CAS_PTR_OBJ_COPY(p_obj, p_obj_copy)) {//this is sync compare and swap 
 		TRACE_1(self, "[%ld] CAS failed\n", self->local_version);
 		return 0;
 	}
